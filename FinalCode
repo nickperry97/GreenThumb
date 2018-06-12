@@ -504,39 +504,16 @@ while reset == 1:
                         GPIO.output(18,True)
                         time.sleep(1)
                         
-            
-                    
-                        
-                
-                #if pH < 5.5:    
-    ##                auto_counter = 0
-    ##                #increase counter to cycle through option
-    ##                if auto_counter == 5:
-    ##                    auto_counter=0
-           
-            
-            
-            
-            
-            
-            
+
             
         
         if a == 1:
             
             power_counter = 0# counter for autoscroll
-##            for l in range(8):
-##            # The read_adc function will get the value of the specified channel (0-7).
-##                values[l] = mcp.read_adc(l)
-##                ph[0] =(values[0]*(3430/Decimal(319))) #(245/Decimal(22)) corresponds to 11.14 which is the constant that calibrates this
-##                tds[0] = (values[1])
-##            
-##                ac[0] = (ph[0]/Decimal(1023)- Decimal(0.6))
-##                ac[1] = 2.71828**((tds[0]+607.09)/147.74)
+
             ac[0] = read_ph()
             ac[1] = read_TDS()
-    ##            ph[l] =(values[l]*(3430/Decimal(319)))
-    ##            phac[l] = ph[l]/Decimal(1023)
+
                 
             powerOptions = ['Lights On','Lights Off','Reset','Power Off']
             
@@ -720,17 +697,8 @@ while reset == 1:
                         
         if a== 2:
             sensor_counter = 0# counter for autoscroll
-##            for p in range(8):
-##            # The read_adc function will get the value of the specified channel (0-7).
-##                values[p] = mcp.read_adc(p)
-##                ph[0] =(values[0]*(3430/Decimal(319)))#(245/Decimal(22)) corresponds to 11.14 which is the constant that calibrates this
-##                tds[0] = (values[1])
-##            
-##                ac[0] = (ph[0]/Decimal(1023)- Decimal(0.6))
-##                ac[1] = 2.71828**((tds[0]+607.09)/147.74)
-                
-    ##            ph[i] =(values[i]*(3430/Decimal(319)))
-    ##            phac[i] = ph[i]/Decimal(1023)      
+
+     
             counter = 1
 
             
@@ -739,8 +707,7 @@ while reset == 1:
                 ac[0] = read_ph()
                 ac[1] = read_TDS()
                     
-    ##                ph[m] =(values[m]*(3430/Decimal(319)))
-    ##                phac[m] = ph[m]/Decimal(1023)
+
                     
                 if chooseOnTime <= workingTime() < (chooseOnTime + dataArray[4][i]):
                     print('LEDs on')
