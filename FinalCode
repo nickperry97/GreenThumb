@@ -1,0 +1,893 @@
+##GreenThumb main code.
+##Final Edit, 6/6/18
+##Created by Nicholas Perry and Areg Nzsdejan
+
+
+## Include all code in while loop to enable 'reset' and 'turn off' functions
+reset = 1
+while reset == 1:
+    reset = 0 ##Set reset = 0 so that it can enter the main loop for menu later on
+    
+    ## Import relevant libraries
+    import time  ## Allows us to set time delays
+    import Adafruit_CharLCD as LCD ## Allows use of pre-programmed LCD functions (see source code included in main repository for more information)
+    import os #imports the os module allowing us to enable the temp sensor drivers and
+            
+    import datetime               ## Allows us to obtain current time from the internet
+    import string                 ## Built in functions for performing operations on strings
+    import spidev                 ## Allows use of functions relating to the transfer of daat from ADC to RPi
+    import Adafruit_GPIO.SPI as SPI ## Allows use of serial communication to GPIO pins
+    import Adafruit_MCP3008       ## Allows use of functions relating to the functioning of the ADC
+    from decimal import Decimal   ## Allows one to create variables of 'Decimal' type
+    import RPi.GPIO as GPIO       ## Allows use of GPIO pins (declare the name as GPIO to avoid confusion)
+
+    os.system('modprobe w1-gpio') ## load the drivers for temperature sensor
+    os.system('modprobe w1-therm')
+    
+    ## Allocate name to location of address of temperature sensor
+    temp_sensor = "/sys/bus/w1/devices/28-031702beccff/w1_slave"
+
+    LCD_LINE_1 = 0x00             ## LCD RAM address for the 1st line
+    LCD_LINE_2 = 0x08             ## LCD RAM address for the 2nd line
+
+    ## Declare plant data array which includes plant specific data on pH, TDS and light time and array of 'on times' according to data obtained from online
+    dataArray = [[5.5,5.5,5.5,5.5,5.5],[6.8,6.8,6.5,6.6,6.5],[1000,0,0,0,0],[6000,5000,8400,5000,5000],[12,12,12,12,12],[15,14,15,15,14]]
+    onTimes = ['Midnight'+'       \x01'+'\n'+'               \x02','1:00am'+'         \x01\n'+'               \x02','2:00am'+'         \x01\n'+'               \x02','3:00am'+'          \x01\n'+'               \x02','4:00am'+'         \x01\n'+'               \x02','5:00am'+'         \x01\n'+'               \x02','6:00am'+'         \x01\n'+'               \x02','7:00am'+'         \x01\n'+'               \x02','8:00am'+'           \x01\n'+'               \x02','9:00am'+'         \x01\n'+'               \x02','10:00am'+'        \x01\n'+'               \x02','11:00am'+'        \x01\n'+'               \x02','12:00 Midday'+'   \x01\n'+'               \x02','1:00pm'+'         \x01\n'+'               \x02','2:00pm'+'         \x01\n'+'               \x02','3:00pm'+'        \x01\n'+'               \x02','4:00pm'+'         \x01\n'+'               \x02','5:00pm'+'         \x01\n'+'               \x02','6:00pm'+'         \x01\n'+'               \x02','7:00pm'+'         \x01\n'+'               \x02','8:00pm'+'         \x01\n'+'               \x02','9:00pm'+'         \x01\n'+'               \x02','10:00pm'+'        \x01\n'+'               \x02','11:00pm'+'        \x01\n'+'               \x02']
+
+    ## Declare reference numbers for each button on LCD according to source code given
+    SELECT = 0
+    RIGHT = 1
+    DOWN = 2
+    UP = 3
+    LEFT = 4
+    lcd = LCD.Adafruit_CharLCDPlate() ## Declare an instance of the LCD class, named 'lcd'
+
+    ## Set LCD back light colour to neutral
+    lcd.set_color(1,1,1)
+
+    ## Set port and device numbers for the ADC
+    SPI_PORT   = 0
+    SPI_DEVICE = 0
+    
+    ## Allocate name to ADC 
+    mcp = Adafruit_MCP3008.MCP3008(spi=SPI.SpiDev(SPI_PORT, SPI_DEVICE))
+
+    ## Declare arrays to store analog values during manipulation of voltage value to corresponding pH or TDS value
+    values = [0]*8
+    ph = [0]*8
+    tds = [0]*8
+    ac = [0]*8
+
+    
+    #create custom characters
+    lcd.create_char(1,[0x0,0x0,0x4,0xe,0x1f,0x0,0x0,0x0])
+    lcd.create_char(2,[0x0,0x0,0x1f,0xe,0x4,0x0,0x0,0x0])
+    lcd.create_char(3,[0xc,0x12,0x12,0xc,0x0,0x0,0x0,0x0])
+    lcd.create_char(4,[0x0,0xc,0xc,0xc,0xf,0x1f,0x1f,0x1f])
+    lcd.create_char(5,[0x0,0x0,0x0,0x0,0x3,0x3,0x3,0x3])
+    lcd.create_char(6,[0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0])
+
+    ## Define a time that can be used to accommodate for the fact that we are using 24 hr clock and we need to accomodate on times of 12hrs+
+    def workingTime():
+        if chooseOnTime >=12:
+            if 0<= int((datetime.datetime.now()).strftime("%H")) <= 12:
+                workingTime = int((datetime.datetime.now()).strftime("%H")) +24
+            else:
+                workingTime = int((datetime.datetime.now()).strftime("%H"))
+                
+        elif chooseOnTime <=12:
+            workingTime = int((datetime.datetime.now()).strftime("%H"))
+        
+        return workingTime
+
+    ## Define a function which will be the main menu
+    def menu():
+    #menu - left most characters should be arrows to indicate need to scroll
+        menuOptions = ['Auto Display','Lights & Power','Sensor Data']
+        menuexit = 1
+        a=0 #counter for top line
+        lcd.message('Menu options:'+'  \x01\n' + menuOptions[0]+'   \x02') ## Display the first menu option upon entering the menu
+
+                
+        while (lcd.is_pressed(SELECT) !=True ): ## Until selection is made
+            if (chooseOnTime <= workingTime() < (chooseOnTime + dataArray[4][i])): ## Check if lights should be on
+                
+                GPIO.output(17,GPIO.HIGH) ## If 'yes' then turn lights on
+            else:     
+                
+                GPIO.output(17,GPIO.LOW)   ## If 'no' then turn lights off
+                            
+            if lcd.is_pressed(DOWN) ==True: #go down an option
+                
+                time.sleep(0.01) ## Avoids flashing of LCD screen
+                lcd.clear()
+                
+                if a < 3: ## Increments counter value if down is pressed
+                    a += 1                
+                    if a > 2: ## Makes screen cycle between options 
+                        a = 0
+                    lcd.message('Menu options:'+'  \x01\n' + menuOptions[a]) ## display option on line 1
+                    lcd.set_right_to_left()
+                    lcd.message('\n\x02')
+                    lcd.set_left_to_right()
+            if lcd.is_pressed(UP)==True: #go up an option
+                time.sleep(0.01)
+                lcd.clear()
+                
+                if a >-1: ## Cycle counter value if up is pressed above the first option
+                    a -= 1
+                    if a < 0:
+                        a = 2
+                    lcd.message('Menu options:'+'  \x01\n' + menuOptions[a]) ## display option on line 1
+                    lcd.set_right_to_left()
+                    lcd.message('\n\x02') ## Include up/down arrows on right hand side of LCD
+                    lcd.set_left_to_right()
+                           
+                    
+        return a ## Return the value of the currently selected menu option
+                
+            
+
+    ## temp_raw outputs the two lines of raw data that are obtained from the terminal
+    def temp_raw():
+
+        f = open(temp_sensor, 'r')
+        lines = f.readlines()
+        f.close()
+        return lines
+
+
+   ## Obtains the temperature from the raw data
+    def read_temp():
+            
+        lines = temp_raw()
+        while lines[0].strip()[-3:] != 'YES':   ## Check to see if the last part of first line is yes
+            time.sleep(0.2) #if it isnt yes then wait 0.2 seconds and repeat
+            lines = temp_raw()
+
+    #str1.find(str2) returns index of str2 in str1 and returns -1 if not present
+        temp_output = lines[1].find('t=')
+
+    #obtains temp and converts its value to degrees celcius
+        if temp_output != -1:
+            temp_string = lines[1].strip()[temp_output+2:]
+            temp_c = float(temp_string) / 1000.0
+
+        return temp_c
+
+    ## Define function for reading in the pH
+    def read_ph():
+        
+        
+            ## The read_adc function will get the value of the specified channel (0 - pH).
+            values[0] = mcp.read_adc(0)
+            ph[0] =(values[0]*(3430/Decimal(319)))  ## Calibration of pH sensor
+            ac[0] = (ph[0]/Decimal(1023)- Decimal(0.6))
+        
+        return ac[0] ## Return pH value
+    
+    ## Define function for calculating the TDS value from sensor voltage
+    def read_TDS():
+        
+        
+        ## The read_adc function will get the value of the specified channel (1 - TDS).
+        values[1] = mcp.read_adc(1)
+        tds[0] = (values[1])
+        voltage = tds[0]*3.3/1024
+        
+        ## Calibration of TDS meter - involves taking temperature into account
+        compensationCoefficient = 1.00 + 0.02*((int(read_temp()))-25)
+        compensationVoltage = float(voltage)/compensationCoefficient
+        provTDS = 0.5*(133.42*compensationVoltage*compensationVoltage*compensationVoltage - 255.86*compensationVoltage*compensationVoltage + 857.39*compensationVoltage)
+        if provTDS < 1000:
+            ac[1] = provTDS
+        elif provTDS >=1000: ## Calibration for TDS values over 2000 - from experiment we found that this gave more accurate results
+            ac[1] = ((provTDS-1000)*12)+1000
+        
+        return ac[1] ## Return TDS value
+
+    ## Set up the GPIO pins
+    
+    GPIO.setmode(GPIO.BCM)
+    GPIO.setwarnings(False)
+    GPIO.setup(17,GPIO.OUT)
+    GPIO.setup(18,GPIO.OUT)
+    GPIO.output(18,True)    #This sets the buzzer LOW so that it is OFF
+
+    ## Intro message
+    lcd.clear() ## Clear LCD
+    lcd.message('  Welcome to\n  GreenThumb!'+'\x05'+'\x04') ## Includes the 'thumb' custom characters
+
+    print((datetime.datetime.now().strftime("%H:%M:%S"))) ##check correct time on the computer (for our reference only)
+
+    time.sleep(3) ## Wait 3 seconds
+    lcd.clear()
+    time.sleep(1)
+    lcd.message('Use "Up"/"Down"\nbutton to scroll')
+    time.sleep(3)
+    lcd.clear()
+
+    lcd.clear()
+    lcd.message('Select a plant\nto grow:')
+    time.sleep(1)
+    lcd.clear()
+    time.sleep(1)
+
+    ## Define plants list
+    plantOptions = ['Basil\n'+'               \x02', 'Chilli'+'         \x01\n'+'               \x02','Lettuce'+'        \x01\n'+'               \x02','Spinach'+'        \x01\n'+'               \x02','Tomato'+'         \x01\n']
+    i=0 ## Counter for top line
+
+    lcd.message(plantOptions[0])
+
+
+    while lcd.is_pressed(SELECT) !=True: ## Until selection is made
+        
+
+        if lcd.is_pressed(DOWN) == True: ## Go down an option
+
+                    time.sleep(0.25)
+                    lcd.clear()
+                    if i < 5:
+                        i += 1
+                        if i>4:
+                            i = 4
+
+                        lcd.message(plantOptions[i]) ## Display option on line 1
+                
+                
+        
+        if lcd.is_pressed(UP)== True: ## Go up an option
+            time.sleep(0.25)
+            lcd.clear()
+            
+            if i > -1:
+                i -= 1
+                if i < 0:
+                    i = 0
+                lcd.message(plantOptions[i]) ## Display option on line 1
+                
+
+    lcd.clear()
+    time.sleep(1)
+
+    lcd.clear()
+    lcd.message('You have \nselected ' + plantOptions[i])
+    time.sleep(3)
+    lcd.clear()
+    lcd.message('Set-Up \nInstructions:')
+    time.sleep(3)
+    lcd.clear()
+
+    ## Read in values of pH and TDS to be used in the check
+    read_ph()
+    read_tds()
+                
+
+    instructions = ['1.Add 6L of cold\nwater (<20'+'\x03'+'C)','Temperature\n'+'check: ' + str(read_temp())+ '\x03'+'C', '2.Adjust pH to\n'+'within ' + str(dataArray[0][i]) +'-'+ str(dataArray[1][i]),'pH check:' + '\npH'+'{0:>5.2f}'.format(*ac), '3.Adjust nutri-\nents ' + str(dataArray[2][i]) + '-' + str(dataArray[3][i]),'Nutrient check:' + '\n'+'{1:>5.2f}'.format(*ac),'4.Growth stage:'+'\nLEDs on for ' + str(dataArray[4][i]) + 'h','5.Bloom Stage:'+'\nLEDs on for ' + str(dataArray[5][i]) + 'h', 'See manual for'+'\nmore info', 'Press "Select"\nto continue']
+                    
+    lcd.message(instructions[0])
+    lcd.set_cursor(15,1)
+    lcd.message('\x02')
+    lcd.home()                                                                                                                                                                                                                                                                                                                                                                                                                                                                            
+    instruction_counter = 0
+                    
+    while lcd.is_pressed(SELECT) !=True: #until selection is made
+
+
+        if lcd.is_pressed(DOWN) == True: #go down an option                    
+            time.sleep(0.25)
+            lcd.clear()
+            if instruction_counter < 10:
+                instruction_counter+= 1
+                if instruction_counter>9:
+                   instruction_counter= 0
+
+                lcd.message(instructions[instruction_counter]) #display option on line 1
+                lcd.set_cursor(15,0)
+                lcd.message('\x01')
+                lcd.set_cursor(15,1)
+                lcd.message('\x02')
+                lcd.home()
+        
+        if lcd.is_pressed(UP)== True: #go up an option
+            time.sleep(0.25)
+            lcd.clear()
+            
+            if instruction_counter > -1:
+                instruction_counter -= 1
+                lcd.message(instructions[instruction_counter]) #display option on line 1while
+                lcd.set_cursor(15,0)
+                lcd.message('\x01')
+                lcd.set_cursor(15,1)
+                lcd.message('\x02')
+                lcd.home()
+                if instruction_counter < 0:
+                    instruction_counter = 0
+                lcd.message(instructions[instruction_counter]) #display option on line 1while           
+                lcd.set_cursor(15,1)
+                lcd.message('\x02')
+                lcd.home()
+
+    time.sleep(1)
+    lcd.clear()
+    lcd.message('Choose LED \nstart time:')
+    time.sleep(3)
+    lcd.clear()
+
+    lcd.message(onTimes[0])
+    chooseOnTime = 0
+              
+    while lcd.is_pressed(SELECT) !=True: #until selection is made
+        if lcd.is_pressed(DOWN) == True: #go down an option                    
+            time.sleep(0.25)
+            lcd.clear()
+            if chooseOnTime < 24:
+                chooseOnTime+= 1
+                if chooseOnTime>23:
+                   chooseOnTime= 0
+
+                lcd.message(onTimes[chooseOnTime]) #display option on line 1
+                
+            
+        
+        if lcd.is_pressed(UP)== True: #go up an option
+            time.sleep(0.25)
+            lcd.clear()
+            
+            if chooseOnTime > -1:
+                chooseOnTime -= 1
+                if chooseOnTime< 0:
+                    chooseOnTime = 23
+                lcd.message(onTimes[chooseOnTime]) #display option on line 1while 
+        
+
+    time.sleep(1)
+    lcd.clear()
+    lcd.message('LEDs will turn\non at '+ str(onTimes[chooseOnTime]))
+    time.sleep(2)
+    
+
+    while reset == 0:
+        #get the user input from menu function
+        lcd.clear()
+        a = menu()
+        
+        #enter autoscroll mode
+        if a == 0:
+            autoscroll=1
+            auto_counter = 0
+            ac[0] = read_ph()
+            ac[1] = read_TDS()
+##            for k in range(8):
+##                # The read_adc function will get the value of the specified channel (0-7).
+##                values[k] = mcp.read_adc(k)
+##                ph[0] =(values[0]*(3430/Decimal(319)))  #(245/Decimal(22)) corresponds to 11.14 which is the constant that calibrates this
+##                tds[0] = (values[1])
+##            
+##                ac[0] = (ph[0]/Decimal(1023)- Decimal(0.6))
+##                ac[1] = 2.71828**((tds[0]+607.09)/147.74)
+                
+    ##            ph[0] =(values[0]*(3430/Decimal(319)))
+    ##            phac[0] = ph[0]/Decimal(1023)
+                
+                #Setup what you display to the user
+            
+            while(auto_counter <4 and autoscroll ==1):
+                autodisplayOptions = ['Time:\n'+ (datetime.datetime.now().strftime("%H:%M")), 'Water Temp.\n'+str(read_temp())+ ' C', 'pH:\n'+'{0:>5.2f}'.format(*ac),'Nutrient Level:\n'+'{1:>5.2f}'.format(*ac)]
+                #CHECK IF YOU NEED THIS REDEFINITION AS IT SEEMS TO WORK WITHOUT IT BELOW
+                
+                ac[0] = read_ph()
+                ac[1] = read_TDS()
+##                values[0] = mcp.read_adc(0)
+##                values[1] = mcp.read_adc(1)
+##                ph[0] =(values[0]*(3430/Decimal(319))) #(245/Decimal(22)) corresponds to 11.14 which is the constant that calibrates this
+##                tds[0] = (values[1])
+##            
+##                ac[0] = (ph[0]/Decimal(1023)- Decimal(0.6))
+##                ac[1] = 2.71828**((tds[0]+607.09)/147.74)
+                
+    ##            ph[0] =(values[0]*(3430/Decimal(319)))
+    ##            phac[0] = ph[0]/Decimal(1023)
+                
+                if (chooseOnTime <= workingTime() < (chooseOnTime + dataArray[4][i])):
+                    print('LEDs on')
+                    GPIO.output(17,GPIO.HIGH)
+                else:
+                    print('LEDs off')
+                    GPIO.output(17,GPIO.LOW)
+                
+                if (dataArray[1][i]) > read_ph() > (dataArray[0][i]):# pH boundaries
+                    print(ac[0])
+                    if read_temp() < 25:
+                        
+                        print(str(read_temp()))
+                        if (dataArray[3][i]) > read_TDS() >(dataArray[2][i]):
+                            print(ac[1])
+                            lcd.clear()
+                            lcd.message(autodisplayOptions[auto_counter])
+                            for j in range(1000):
+                                if lcd.is_pressed(LEFT) == True:
+                                    autoscroll=0
+                                    break
+                            auto_counter += 1
+                            if auto_counter ==4:
+                                auto_counter = 0
+                                
+                        elif (ac[1] > (dataArray[3][i])):
+                            while read_TDS() > (dataArray[3][i]):
+                                print(ac[1])
+                                lcd.clear()
+                                lcd.message('Nutrient excess:\n '+'{1:>5.2f}'.format(*ac))
+                                time.sleep(1)
+                                lcd.clear()
+                                lcd.message('Lower to below \n'+str((dataArray[3][i]))+'!')
+                                time.sleep(1)
+                                GPIO.output(18,False)
+                                time.sleep(1)
+                                GPIO.output(18,True)
+                                time.sleep(1)
+                                GPIO.output(18,False)
+                                time.sleep(1)
+                                GPIO.output(18,True)
+                                time.sleep(1)
+                                
+                                
+                        elif (ac[1] < (dataArray[2][i])):
+                            while read_TDS() < (dataArray[2][i]):
+                                print(ac[1])
+                                lcd.clear()
+                                lcd.message('Nutrient \ndeficiency'+'{1:>5.2f}'.format(*ac))
+                                time.sleep(1)
+                                lcd.clear()
+                                lcd.message('Raise to above \n'+str(dataArray[2][i])+'!')
+                                time.sleep(1)
+                                GPIO.output(18,False)
+                                time.sleep(1)
+                                GPIO.output(18,True)
+                                time.sleep(1)
+                                GPIO.output(18,False)
+                                time.sleep(1)
+                                GPIO.output(18,True)
+                                time.sleep(1)
+                                
+                        
+                    else:
+                        while read_temp() >25:
+                            lcd.clear()
+                            lcd.message('Temperature too \nhigh: '+str(read_temp()))
+                            time.sleep(1)
+                            lcd.clear()
+                            lcd.message('Lower to 20C!')
+                            time.sleep(1)
+                            GPIO.output(18,False)
+                            time.sleep(1)
+                            GPIO.output(18,True)
+                            time.sleep(1)
+                            GPIO.output(18,False)
+                            time.sleep(1)
+                            GPIO.output(18,True)
+                            time.sleep(1)
+                                       
+                            
+                elif (ac[0] >(dataArray[1][i])): # changed upper bound to 10 instead of 6.5 to test
+                    while read_ph()>(dataArray[1][i]):# changed upper bound to 10 instead of 6.5 to test
+                        print(ac[0])
+                        lcd.clear()
+                        lcd.message('Solution too \nalkaline pH'+'{0:>5.2f}'.format(*ac))
+                        time.sleep(1)
+                        lcd.clear()
+                        lcd.message('Lower to below \n'+str(dataArray[1][i])+'!')
+                        time.sleep(1)
+                        GPIO.output(18,False)
+                        time.sleep(1)
+                        GPIO.output(18,True)
+                        time.sleep(1)
+                        GPIO.output(18,False)
+                        time.sleep(1)
+                        GPIO.output(18,True)
+                        time.sleep(1)
+                        
+                elif (ac[0] < (dataArray[0][i])):
+                    while read_ph() <(dataArray[0][i]):
+                        lcd.clear()
+                        lcd.message('Solution too \nacidic pH'+'{0:>5.2f}'.format(*ac))
+                        time.sleep(1)
+                        lcd.clear()
+                        lcd.message('Raise to above \n'+str(dataArray[0][i])+'!')
+                        time.sleep(1)
+                        GPIO.output(18,False)
+                        time.sleep(1)
+                        GPIO.output(18,True)
+                        time.sleep(1)
+                        GPIO.output(18,False)
+                        time.sleep(1)
+                        GPIO.output(18,True)
+                        time.sleep(1)
+                        
+            
+                    
+                        
+                
+                #if pH < 5.5:    
+    ##                auto_counter = 0
+    ##                #increase counter to cycle through option
+    ##                if auto_counter == 5:
+    ##                    auto_counter=0
+           
+            
+            
+            
+            
+            
+            
+            
+        
+        if a == 1:
+            
+            power_counter = 0# counter for autoscroll
+##            for l in range(8):
+##            # The read_adc function will get the value of the specified channel (0-7).
+##                values[l] = mcp.read_adc(l)
+##                ph[0] =(values[0]*(3430/Decimal(319))) #(245/Decimal(22)) corresponds to 11.14 which is the constant that calibrates this
+##                tds[0] = (values[1])
+##            
+##                ac[0] = (ph[0]/Decimal(1023)- Decimal(0.6))
+##                ac[1] = 2.71828**((tds[0]+607.09)/147.74)
+            ac[0] = read_ph()
+            ac[1] = read_TDS()
+    ##            ph[l] =(values[l]*(3430/Decimal(319)))
+    ##            phac[l] = ph[l]/Decimal(1023)
+                
+            powerOptions = ['Lights On','Lights Off','Reset','Power Off']
+            
+            pcounter = 1
+            power_counter_store = 10
+            
+            while pcounter == 1:
+                
+                if chooseOnTime <= workingTime() < (chooseOnTime + dataArray[4][i]):
+                    print('LEDs on')
+                    GPIO.output(17,GPIO.HIGH)
+                else:
+                    print('LEDs off')
+                    GPIO.output(17,GPIO.LOW)
+                    
+                ac[0] = read_ph()
+                ac[1] = read_TDS()
+                
+                if (dataArray[1][i]) > ac[0] > (dataArray[0][i]):# pH boundaries
+                    print(ac[0])
+                    if read_temp() < 25: #Changed temp to 26.75 to test
+                        if (dataArray[3][i]) > ac[1] >(dataArray[2][i]):
+                        
+                            lcd.clear()
+                            lcd.message(powerOptions[power_counter])
+                            lcd.set_cursor(15,0)
+                            lcd.message('\x01')
+                            lcd.set_cursor(15,1)
+                            lcd.message('\x02')
+                            lcd.home()
+                            
+                            
+                            for j in range(1000):
+                                if lcd.is_pressed(LEFT) == True:
+
+                                            pcounter=0
+                                            break
+                                        
+                                if lcd.is_pressed(SELECT) == True:
+                                    power_counter_store = power_counter
+                                    if power_counter_store == 0:
+                                        print('LEDs on')
+                                        GPIO.output(17,GPIO.HIGH)
+                                        pcounter=1
+                                        
+                                    if power_counter_store == 1:
+                                        print('LEDs off')
+                                        GPIO.output(17,GPIO.LOW)
+                                        pcounter=1
+                                        
+                                    if power_counter_store == 2:
+                                       
+                                        reset = 1
+                                        pcounter=0
+                                    
+                                    if power_counter_store == 3:
+                                        lcd.clear()
+                                        reset = 2
+                                        pcounter=0
+                                    
+                            
+                                    
+                                    
+                                    break
+                                    
+                                    
+                                if lcd.is_pressed(UP) ==True:
+         
+
+                                            time.sleep(0.1)
+                                            if power_counter> -1:
+                                               
+                                                power_counter-= 1
+                                               
+                                                if power_counter < 0:
+                                                    power_counter = 3
+                                            break
+                               
+                                      
+                                if lcd.is_pressed(DOWN) ==True:
+                                    if lcd.is_pressed(DOWN) ==True:
+
+                                            time.sleep(0.1)
+                                    
+                                            if power_counter< 4:
+                                                
+                                                power_counter+= 1
+                                                
+                                                if power_counter > 3:
+                                                    power_counter = 0 
+                                            break
+                                    
+                        elif (ac[1] > (dataArray[3][i])):
+                            while read_TDS() > (dataArray[3][i]):
+                                print(ac[1])
+                                lcd.clear()
+                                lcd.message('Nutrient excess:\n: '+'{1:>5.2f}'.format(*ac) )
+                                time.sleep(1)
+                                lcd.clear()
+                                lcd.message('Lower to below \n'+str((dataArray[3][i]))+'!')
+                                time.sleep(1)
+                                GPIO.output(18,False)
+                                time.sleep(1)
+                                GPIO.output(18,True)
+                                time.sleep(1)
+                                GPIO.output(18,False)
+                                time.sleep(1)
+                                GPIO.output(18,True)
+                                time.sleep(1)
+                                
+                                
+                        elif (ac[1] < (dataArray[2][i])):
+                            while read_TDS() < (dataArray[2][i]):
+                                print(ac[1])
+                                lcd.clear()
+                                lcd.message('Nutrient \ndeficiency:'+'{1:>5.2f}'.format(*ac))
+                                time.sleep(1)
+                                lcd.clear()
+                                lcd.message('Raise to above \n'+str(dataArray[2][i])+'!')
+                                time.sleep(1)
+                                GPIO.output(18,False)
+                                time.sleep(1)
+                                GPIO.output(18,True)
+                                time.sleep(1)
+                                GPIO.output(18,False)
+                                time.sleep(1)
+                                GPIO.output(18,True)
+                                time.sleep(1)
+                                
+                        
+                    else:
+                        while read_temp() >25:
+                            lcd.clear()
+                            lcd.message('Temperature too \nhigh: '+str(read_temp()))
+                            time.sleep(1)
+                            lcd.clear()
+                            lcd.message('Lower to 20C!')
+                            time.sleep(1)
+                            GPIO.output(18,False)
+                            time.sleep(1)
+                            GPIO.output(18,True)
+                            time.sleep(1)
+                            GPIO.output(18,False)
+                            time.sleep(1)
+                            GPIO.output(18,True)
+                            time.sleep(1)
+                elif (ac[0] >(dataArray[1][i])): # changed upper bound to 10 instead of 6.5 to test
+                    while read_ph()>(dataArray[1][i]):# changed upper bound to 10 instead of 6.5 to test
+                        print(ac[0])
+                        lcd.clear()
+                        lcd.message('Solution too \nalkaline pH'+'{0:>5.2f}'.format(*ac))
+                        time.sleep(1)
+                        lcd.clear()
+                        lcd.message('Lower to below \n'+str(dataArray[1][i])+'!')
+                        time.sleep(1)
+                        GPIO.output(18,False)
+                        time.sleep(1)
+                        GPIO.output(18,True)
+                        time.sleep(1)
+                        GPIO.output(18,False)
+                        time.sleep(1)
+                        GPIO.output(18,True)
+                        time.sleep(1)
+                        
+                elif (ac[0] < (dataArray[0][i])):
+                    while read_ph() <(dataArray[0][i]):
+                        lcd.clear()
+                        lcd.message('Solution too \nacidic pH'+'{0:>5.2f}'.format(*ac))
+                        time.sleep(1)
+                        lcd.clear()
+                        lcd.message('Raise to above \n'+str(dataArray[0][i])+'!')
+                        time.sleep(1)
+                        GPIO.output(18,False)
+                        time.sleep(1)
+                        GPIO.output(18,True)
+                        time.sleep(1)
+                        GPIO.output(18,False)
+                        time.sleep(1)
+                        GPIO.output(18,True)
+                        time.sleep(1)
+                        
+        if a== 2:
+            sensor_counter = 0# counter for autoscroll
+##            for p in range(8):
+##            # The read_adc function will get the value of the specified channel (0-7).
+##                values[p] = mcp.read_adc(p)
+##                ph[0] =(values[0]*(3430/Decimal(319)))#(245/Decimal(22)) corresponds to 11.14 which is the constant that calibrates this
+##                tds[0] = (values[1])
+##            
+##                ac[0] = (ph[0]/Decimal(1023)- Decimal(0.6))
+##                ac[1] = 2.71828**((tds[0]+607.09)/147.74)
+                
+    ##            ph[i] =(values[i]*(3430/Decimal(319)))
+    ##            phac[i] = ph[i]/Decimal(1023)      
+            counter = 1
+
+            
+            while counter == 1:
+                sensorOptions = ['Water Temp.\n'+str(read_temp())+ ' C', 'pH:\n'+'{0:>5.2f}'.format(*ac),'Nutrient Level:\n'+'{1:>5.2f}'.format(*ac)]
+                ac[0] = read_ph()
+                ac[1] = read_TDS()
+                    
+    ##                ph[m] =(values[m]*(3430/Decimal(319)))
+    ##                phac[m] = ph[m]/Decimal(1023)
+                    
+                if chooseOnTime <= workingTime() < (chooseOnTime + dataArray[4][i]):
+                    print('LEDs on')
+                    GPIO.output(17,GPIO.HIGH)
+                else:
+                    print('LEDs off')
+                    GPIO.output(17,GPIO.LOW)
+                    
+                    
+                if (dataArray[1][i]) > ac[0] > (dataArray[0][i]):# pH boundaries# changed upper bound to 10 instead of 6.5 to test
+                    print(ac[0])
+                    print(ac[1])
+                    
+                    if read_temp() < 25: #Changed temp to 29 to test
+                        if (dataArray[3][i]) > ac[1] >(dataArray[2][i]):
+                        
+                                lcd.clear()
+                                lcd.message(sensorOptions[sensor_counter])
+                                lcd.set_cursor(15,0)
+                                lcd.message('\x01')
+                                lcd.set_cursor(15,1)
+                                lcd.message('\x02')
+                                lcd.home()
+                                for j in range(250):
+                                    if lcd.is_pressed(LEFT) == True:
+                                       if lcd.is_pressed(LEFT) == True:
+                                           if lcd.is_pressed(LEFT) == True:
+                                                counter=0
+                                                break
+                                    if lcd.is_pressed(UP) ==True:
+                                        if lcd.is_pressed(UP) ==True:
+                                            if lcd.is_pressed(UP) ==True:
+                                                time.sleep(0.1)
+                                                if sensor_counter> -1:
+                                                   
+                                                    sensor_counter-= 1
+                                                   
+                                                    
+                                                if sensor_counter < 0:
+                                                        sensor_counter = 0
+                                                break
+                                   
+                                          
+                                    if lcd.is_pressed(DOWN) ==True:
+                                        if lcd.is_pressed(DOWN) ==True:
+                                            if lcd.is_pressed(DOWN) ==True:
+                                                time.sleep(0.1)
+                                        
+                                                if sensor_counter< 3:
+                                                    
+                                                    sensor_counter+= 1
+                                                    
+                                                    if sensor_counter > 2:
+                                                        sensor_counter = 2
+                                                break
+                        elif (ac[1] > (dataArray[3][i])):
+                            while read_TDS() > (dataArray[3][i]):
+                                print(ac[1])
+                                lcd.clear()
+                                lcd.message('Nutrient excess:\n '+'{1:>5.2f}'.format(*ac))
+                                time.sleep(1)
+                                lcd.clear()
+                                lcd.message('Lower to below \n'+str((dataArray[3][i]))+'!')
+                                time.sleep(1)
+                                GPIO.output(18,False)
+                                time.sleep(1)
+                                GPIO.output(18,True)
+                                time.sleep(1)
+                                GPIO.output(18,False)
+                                time.sleep(1)
+                                GPIO.output(18,True)
+                                time.sleep(1)
+                                
+                                
+                        elif (ac[1] < (dataArray[2][i])):
+                            while read_TDS() < (dataArray[2][i]):
+                                print(ac[1])
+                                lcd.clear()
+                                lcd.message('Nutrient \ndeficiency:'+'{1:>5.2f}'.format(*ac))
+                                time.sleep(1)
+                                lcd.clear()
+                                lcd.message('Raise to above \n'+str(dataArray[2][i])+'!')
+                                time.sleep(1)
+                                GPIO.output(18,False)
+                                time.sleep(1)
+                                GPIO.output(18,True)
+                                time.sleep(1)
+                                GPIO.output(18,False)
+                                time.sleep(1)
+                                GPIO.output(18,True)
+                                time.sleep(1)
+                                
+                        
+                    else:
+                        while read_temp() >25:
+                            lcd.clear()
+                            lcd.message('Temperature too \nhigh: '+str(read_temp()))
+                            time.sleep(1)
+                            lcd.clear()
+                            lcd.message('Lower to 20C!')
+                            time.sleep(1)
+                            GPIO.output(18,False)
+                            time.sleep(1)
+                            GPIO.output(18,True)
+                            time.sleep(1)
+                            GPIO.output(18,False)
+                            time.sleep(1)
+                            GPIO.output(18,True)
+                            time.sleep(1)
+                            
+                elif (ac[0] >(dataArray[1][i])): # changed upper bound to 10 instead of 6.5 to test
+                    while read_ph()>(dataArray[1][i]):# changed upper bound to 10 instead of 6.5 to test
+                        print(ac[0])
+                        lcd.clear()
+                        lcd.message('Solution too \nalkaline pH'+'{0:>5.2f}'.format(*ac))
+                        time.sleep(1)
+                        lcd.clear()
+                        lcd.message('Lower to below \n'+str(dataArray[1][i])+'!')
+                        time.sleep(1)
+                        GPIO.output(18,False)
+                        time.sleep(1)
+                        GPIO.output(18,True)
+                        time.sleep(1)
+                        GPIO.output(18,False)
+                        time.sleep(1)
+                        GPIO.output(18,True)
+                        time.sleep(1)
+                        
+                elif (ac[0] < (dataArray[0][i])):
+                    while read_ph() <(dataArray[0][i]):
+                        lcd.clear()
+                        lcd.message('Solution too \nacidic pH'+'{0:>5.2f}'.format(*ac))
+                        time.sleep(1)
+                        lcd.clear()
+                        lcd.message('Raise to above \n'+str(dataArray[0][i])+'!')
+                        time.sleep(1)
+                        GPIO.output(18,False)
+                        time.sleep(1)
+                        GPIO.output(18,True)
+                        time.sleep(1)
+                        GPIO.output(18,False)
+                        time.sleep(1)
+                        GPIO.output(18,True)
+                        time.sleep(1)
+                         
+                
+
+
+
+
